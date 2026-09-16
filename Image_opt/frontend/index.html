@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Image Optimizer</title>
+  <style>
+    body { font-family: Arial; max-width: 700px; margin: 40px auto; }
+    input, select, button { margin: 6px 0; padding: 8px; }
+    #result { margin-top: 20px; }
+    img { max-width: 100%; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <h1>Image Optimizer</h1>
+
+  <form id="form">
+    <input type="file" name="file" accept="image/*" required><br>
+
+    <label>Width:</label>
+    <input type="number" name="width" value="1280"><br>
+
+    <label>Quality:</label>
+    <input type="number" name="quality" value="80"><br>
+
+    <label>Format:</label>
+    <select name="output_format">
+      <option value="webp">WebP</option>
+      <option value="jpeg">JPEG</option>
+    </select><br>
+
+    <button type="submit">Optimize</button>
+  </form>
+
+  <pre id="status">Ready</pre>
+  <div id="result"></div>
+
+  <script>
+    const form = document.getElementById("form");
+    const statusBox = document.getElementById("status");
+    const resultBox = document.getElementById("result");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      resultBox.innerHTML = "";
+      statusBox.textContent = "Uploading...";
+
+      const response = await fetch("/jobs", {
+        method: "POST",
+        body: new FormData(form)
+      });
+
+      const job = await response.json();
+
+      if (!response.ok) {
+        statusBox.textContent = job.detail;
+        return;
+      }
+
+      while (true) {
+        const r = await fetch(`/jobs/${job.task_id}`);
+        const data = await r.json();
+
+        statusBox.textContent =
+          `Task ID: ${job.task_id}\nStatus: ${data.status}\nCache: ${data.cache}`;
+
+        if (data.status === "SUCCESS") {
+          const url = `/downloads/${job.task_id}`;
+
+          resultBox.innerHTML = `
+            <p>Original: ${data.result.original_size} bytes</p>
+            <p>Optimized: ${data.result.optimized_size} bytes</p>
+            <p>Reduction: ${data.result.reduction_percent}%</p>
+            <img src="${url}">
+            <br>
+            <a href="${url}">Download</a>
+          `;
+          break;
+        }
+
+        if (data.status === "FAILED") {
+          statusBox.textContent += `\nError: ${data.error}`;
+          break;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    });
+  </script>
+</body>
+</html>
